@@ -963,7 +963,7 @@ test$predicted_Performance_Tag <- predict(new.step.model,newdata = test, type = 
 table(test$Performance_Tag, test$predicted_Performance_Tag > 0.5)
 
 ### Accuracy ###
-acc <- 19782/(19782 + 870)
+acc <- (19782 + 0)/(19782 + 870 + 0 + 0)
 # 95.8%
 
 ########################################################################################
