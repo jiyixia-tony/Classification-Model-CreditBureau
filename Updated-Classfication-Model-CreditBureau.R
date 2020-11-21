@@ -946,7 +946,7 @@ model <- glm(Performance_Tag ~ . , family = binomial(link = 'logit'), data = tra
 summary(model)
 # We can see from the summary of the regression model that there exist many insignificant variables since the P-value of them are relatively large.
 
-### Step Function ###
+### Stepwise Selection ###
 new.step.model <- step(model)
 summary(new.step.model)
 # I used the step function to just keep those significant variables in the new model #
