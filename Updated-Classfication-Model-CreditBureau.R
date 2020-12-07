@@ -4,7 +4,10 @@ library(ggplot2)
 library(Amelia)
 library(caTools)
 library(vtreat)
-library(broom)
+library(e1071)
+library(caret)
+library(randomForest)
+library(Metrics)
 
 ### Load Data Files ###
 credit <- read.csv('Credit_Bureau.csv',header = T)
@@ -959,8 +962,13 @@ test$predicted_Performance_Tag <- predict(model_2,newdata = test, type = 'respon
 table(test$Performance_Tag, test$predicted_Performance_Tag > 0.5)
 
 ### Accuracy ###
-acc <- 19782/(19782 + 870)
+acc_model_2 <- 19782/(19782 + 870)
 # 95.787%
+
+### Compute the AUC ###
+auc(actual = test$Performance_Tag,
+    predicted = test$predicted_Performance_Tag) 
+# 65.736%
 
 ### Using 5-fold cross-validation ###
 splitPlan <- kWayCrossValidation(nrow(merged_data),5,NULL,NULL)
@@ -974,61 +982,59 @@ merged_data$pred.cv <- 0
 for(i in 1:k) {
   split <- splitPlan[[i]]
   model_3 <- glm(Performance_Tag ~ . , family = binomial(link = 'logit'), data = merged_data[split$train, ])
-  model_4 <- step(model_3)
-  merged_data$pred.cv[split$app] <- predict(model_4, newdata = merged_data[split$app, ])
+  merged_data$pred.cv[split$app] <- predict(model_3, newdata = merged_data[split$app, ])
 }
 
 ### Confusion Matrix ###
 table(merged_data$Performance_Tag, merged_data$pred.cv > 0.5)
 
 ### Accuracy ###
-acc_cv <- 65939/(65939 + 2899)
+acc_model_3 <- 65939/(65939 + 2899)
 # 95.789%
 
-### Metrics for model 1 ###
-glance(model_1) %>%
-  dplyr::select(AIC, BIC)
+### Compute the AUC ###
+auc(actual = merged_data$Performance_Tag,
+    predicted = merged_data$pred.cv) 
+# 61.659%
 
-# A tibble: 1 x 2  #
-#   AIC    BIC     #
-#   <dbl>  <dbl>   #
-#  1 16162. 16760. #
+### Choose the optimal regression model ###
+model_logistic_regression <- model_2
 
-### Metrics for model 2 ###
-glance(model_2) %>%
-  dplyr::select(AIC, BIC)
+#######################
+# RANDOM FOREST MODEL #
+#######################
 
-# A tibble: 1 x 2  #
-#   AIC    BIC     #
-#   <dbl>  <dbl>   #
-#  1 16099. 16240. #
+### Train a random forest ###
+set.seed(1)
 
-### Metrics for model 3 ###
-glance(model_3) %>%
-  dplyr::select(AIC, BIC)
+model_random_forest <- randomForest(Performance_Tag ~ . , data = train)
+print(model_random_forest)
 
-# A tibble: 1 x 2  #
-#   AIC    BIC     #
-#   <dbl>  <dbl>   #  
-#  1 18483. 19098. #
+### Generate predicted classes using the model object ###
+test$predict_random_forest <- predict(model_random_forest,newdata = test, type = 'class')
 
-### Metrics for model 4 ###
-glance(model_4) %>%
-  dplyr::select(AIC, BIC)
+### Calculate the confusion matrix for the test set ###
+cm_random_forest <- confusionMatrix(data = test$predict_random_forest,       # predicted classes
+                      reference = test$Performance_Tag)  # actual classes
+print(cm_random_forest)
+paste0("Test Accuracy: ", cm_random_forest$overall[1])
+# 95.782%
 
-# A tibble: 1 x 2  #
-#   AIC    BIC     #
-#   <dbl>  <dbl>   #  
-#  1 18432. 18663. #
+### Evaluate test set AUC ###
+# Generate predictions on the test set
+test$predict_random_forest_prob <- predict(object = model_random_forest,
+                newdata = test,
+                type = "prob")
+class(test$predict_random_forest_prob)
+head(test$predict_random_forest_prob)
+# Compute the AUC 
+auc(actual = test$Performance_Tag,
+    predicted = test$predict_random_forest_prob[,"1"])  
+# 65.048%
 
-########################################################################################
-# First, I created a train/test split plan to get model_1. After performing stepwise   #
-# function to model_1, I got model_2. Also, I used 5-fold cross-validation to check    # 
-# this classification model, so I got model_3, and after another stepwise function to  #
-# model_3, I got model_4.                                                              #
-#                                                                                      #
-# Comparing the train/test split plan with the 5-fold cross-validation plan, I found   #
-# the 5-fold cross-validation plan can achieve a slightly higher accuracy of 95.789%.  #
-# Within the cross-validation plan, I'll choose model_4, since it shows lower AIC and  #
-# BIC than model_3.                                                                    #
-########################################################################################
+# Based on the accuracy and AUC of these four models, I will choose model 2,
+# which has the highest AUC and second highest accuracy.
+
+
+
+
